@@ -1,0 +1,12 @@
+{
+  "name": "pattes-en-famille",
+  "version": "1.0.0",
+  "private": true,
+  "main": "pattes.js",
+  "scripts": {
+    "start": "node pattes.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
