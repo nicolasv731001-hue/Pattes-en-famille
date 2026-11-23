@@ -67,8 +67,17 @@ const stateFile = path.join(DATA, 'state.json');
 let state = { v: 2, families: {}, sessions: {}, resets: {}, pensions: {}, convs: {}, audit: [], plans: null, admin: null, pay: {}, payments: [], payreq: {} };
 try { state = Object.assign(state, JSON.parse(fs.readFileSync(stateFile, 'utf8'))); } catch (e) { /* premier démarrage */ }
 let stateVer = 0;
+// Sauvegarde GitHub déclenchée par la modification : quelques secondes après (regroupe les rafales), jamais plus souvent que BACKUP_EVERY_SEC.
+let backupTimer = null;
+function scheduleBackup() {
+  try {
+    if (!backup.enabled || backupTimer) return;
+    backupTimer = setTimeout(() => { backupTimer = null; doBackup(false); }, Math.max(1500, backup.everySec * 1000 - (Date.now() - lastBackupAt)));
+    backupTimer.unref();
+  } catch (e) { /* sauvegarde pas encore prête */ }
+}
 function saveState() {
-  stateVer++;
+  stateVer++; scheduleBackup();
   try { const t = stateFile + '.tmp'; fs.writeFileSync(t, JSON.stringify(state), { mode: 0o600 }); fs.renameSync(t, stateFile); } catch (e) { log('state.json : ' + e.message); }
 }
 const animalOwner = new Map(), pushIndex = new Map(), geofences = new Map();
@@ -796,7 +805,7 @@ const PORT = parseInt(process.env.PORT || cfg.port || '8080', 10);
   });
 })();
 async function stop() {
-  store.flush();
+  store.flush(); logs.flush();
   await Promise.race([doBackup(true), new Promise((r) => setTimeout(r, 8000))]);
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1500).unref();
@@ -1938,7 +1947,7 @@ class GithubBackup {
     this.api = (cfg.apiUrl || 'https://api.github.com').replace(/\/$/, '');
     this.token = env.GITHUB_BACKUP_TOKEN;
     this.pass = env.BACKUP_PASSPHRASE;
-    this.everySec = Math.max(5, parseInt(env.BACKUP_EVERY_SEC, 10) || cfg.everySec || 15); // vérifie toutes les 15 s ; n'envoie que s'il y a du nouveau
+    this.everySec = Math.max(5, parseInt(env.BACKUP_EVERY_SEC, 10) || cfg.everySec || 5); // vérifie toutes les 5 s ; n'envoie que s'il y a du nouveau
     this.lastOk = null;
     this.blocked = false; // vrai si la restauration a échoué : on n'écrase pas une sauvegarde qu'on n'a pas su lire
   }
